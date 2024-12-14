@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digit Recognition</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #1e1e2f;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .app {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+            padding: 25px;
+            background: linear-gradient(145deg, #23233a, #1b1b2b);
+            border-radius: 15px;
+            box-shadow: 8px 8px 16px #171724, -8px -8px 16px #292941;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            color: #ff6f61;
+        }
+
+        canvas {
+            border: 2px solid #ff6f61;
+            border-radius: 10px;
+            background-color: #282a36;
+            cursor: crosshair;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            width: 100%;
+        }
+
+        button, input[type="range"] {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button {
+            background-color: #ff6f61;
+            color: white;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 10px rgba(255, 111, 97, 0.3);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            background-color: #3a3a4e;
+            height: 5px;
+            border-radius: 5px;
+            outline: none;
+            transition: background 0.3s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #ff6f61;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #e0554c;
+        }
+
+        #prediction {
+            margin-top: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #79dcb8;
+        }
+
+        img {
+            margin-top: 10px;
+            max-width: 100%;
+            display: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <h1>Digit Recognition</h1>
+        <canvas id="canvas" width="300" height="300"></canvas>
+        <div class="controls">
+            <button id="clear-btn">Clear</button>
+            <button id="eraser-btn">Eraser</button>
+            <label for="brush-size">Brush Size</label>
+            <input type="range" id="brush-size" min="1" max="50" value="10">
+        </div>
+        <div id="prediction">Prediction: N/A</div>
+        <img id="processed-image" src="" alt="Processed Image">
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+        let brushSize = 10;
+        let isEraser = false;
+        let drawing = false;
+
+        // Initialize canvas background to white
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw on canvas
+        canvas.addEventListener('mousedown', (e) => {
+            drawing = true;
+            draw(e.offsetX, e.offsetY);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (drawing) draw(e.offsetX, e.offsetY);
+        });
+
+        canvas.addEventListener('mouseup', () => drawing = false);
+        canvas.addEventListener('mouseleave', () => drawing = false);
+
+        function draw(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = isEraser ? 'white' : 'black';
+            ctx.fill();
+        }
+
+        // Clear button
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            updatePrediction();
+        });
+
+        // Toggle eraser
+        document.getElementById('eraser-btn').addEventListener('click', () => {
+            isEraser = !isEraser;
+            document.getElementById('eraser-btn').textContent = isEraser ? 'Brush' : 'Eraser';
+        });
+
+        // Brush size slider
+        document.getElementById('brush-size').addEventListener('input', (e) => {
+            brushSize = parseInt(e.target.value);
+        });
+
+        // Send image to API
+        function updatePrediction() {
+            canvas.toBlob((blob) => {
+                let formData = new FormData();
+                formData.append('file', blob);
+                $.ajax({
+                    type: 'POST',
+                    url: 'http://127.0.0.1:5000/predict',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: (response) => {
+                        document.getElementById('prediction').textContent = 'Prediction: ' + response.prediction;
+                        if (response.processed_image) {
+                            let img = document.getElementById('processed-image');
+                            img.src = 'data:image/png;base64,' + response.processed_image;
+                            img.style.display = 'block';
+                        }
+                    },
+                    error: (xhr, status, error) => {
+                        console.error(xhr, status, error);
+                    }
+                });
+            });
+        }
+
+        canvas.addEventListener('mouseup', updatePrediction);
+    </script>
+</body>
+</html>
